@@ -1,7 +1,7 @@
 import numpy as np
 
 from scipy.signal import butter, lfilter
-from scipy.spatial.distance import pdist, squareform
+from scipy.spatial.distance import pdist, squareform, cdist
 from tqdm import *
 
 from geometry import find_channel_neighbors
@@ -302,20 +302,26 @@ class RecordingAugmentation(object):
         f.close()
         return np.append(
             self.template_comp.spike_train, aug_spt, axis=0)
-        
-            
+
+
 class SpikeSortingEvaluation(object):
 
-    def __init__(self, spt_base, spt):
+    def __init__(self, spt_base, spt, tmp_base, tmp):
         """Sets up the evaluation object with two spike trains.
 
             Args:
             spt_base: numpy.ndarray of shape [N, 2]. base line spike
             trian. First column is spike times and second the cluster
             identities.
-            spt: numpy.ndarray of shame [M, 2].
+            spt: numpy.ndarray of shape [M, 2].
+            tmp_base: numpy.ndarray of shape [T1, C, N]. Ground truth
+            unit mean waveforms.
+            tmp_base: numpy.ndarray of shape [T2, C, M]. Clustering
+            units mean waveforms.
         """
         # clean the spike train before calling this function.
+        self.tmp_base = tmp_base
+        self.tmp = tmp
         spt_base = clean_spike_train(spt_base)
         spt = clean_spike_train(spt)
         self.n_units = np.max(spt_base[:, 1]) + 1
@@ -371,6 +377,7 @@ class SpikeSortingEvaluation(object):
             int. Number of temporal collisions of spikes in
             array1 vs spikes in array2.
         """
+        # In time samples
         self.admissible_proximity = 60
         m, n = len(array1), len(array2)
         i, j = 0, 0
@@ -388,10 +395,33 @@ class SpikeSortingEvaluation(object):
 
     def compute_accuracies(self):
         """Computes the TP/FP accuracies for the given spike trains."""
-        self.unit_cluster_map = np.argmax(
-            self.confusion_matrix, axis=0)
-        recovered = np.max(self.confusion_matrix, axis=0)
+        # Calculate and match energy of templates.
+        #energy_base = np.linalg.norm(self.tmp_base, axis=0)
+        #energy = np.linalg.norm(self.tmp, axis=0)
+        energy_base = np.max(self.tmp_base, axis=0)
+        energy = np.max(self.tmp, axis=0)
+        energy_dist = cdist(energy_base.T, energy.T)
+        # Maps ground truth unit to matched cluster unit.
+        # -1 indicates no matching if n_units > n_clusters.
+        unmatched_clusters = range(self.n_clusters)
+        self.unit_cluster_map = np.zeros(self.n_units, dtype='int') - 1
+        # First match the largest energy ground truth templates.
+        for unit in reversed(
+            np.argsort(np.linalg.norm(energy_base, axis=0))):
+            if len(unmatched_clusters) < 1:
+                break
+            # If the closest template is not very similar skip it.
+            if np.min(energy_dist[unit, unmatched_clusters]) > 1/4 * np.linalg.norm(energy_base[:, unit]):
+                continue
+            matched_cluster_id = unmatched_clusters[np.argmin(
+                energy_dist[unit, unmatched_clusters])]
+            unmatched_clusters.remove(matched_cluster_id)
+            self.unit_cluster_map[unit] = matched_cluster_id
+        # Units which have a match in the clusters.
+        rec_units = np.where(self.unit_cluster_map > -1)[0]
+        recovered = np.zeros(self.n_units)
+        for unit in rec_units:
+            recovered[unit] = self.confusion_matrix[unit, self.unit_cluster_map[unit]]
         self.true_positive = recovered / self.spike_count_base
         match_count = self.spike_count_cluster[self.unit_cluster_map]
         self.false_positive = (match_count - recovered) / match_count
-  
