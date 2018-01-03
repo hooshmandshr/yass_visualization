@@ -20,7 +20,8 @@ def clean_spike_train(spt):
 class RecordingBatchIterator(object):
 
     def __init__(self, rec_file, geom_file, sample_rate,
-                 n_batches, batch_time_samples, n_chan, radius):
+                 n_batches, batch_time_samples, n_chan,
+                 radius, scale=1e3, filter_std=True, whiten=True):
         """Sets up the object for reading from a binary file.
         
         Args:
@@ -36,6 +37,12 @@ class RecordingBatchIterator(object):
             beginning.
             batch_time_samples: int. Number of time samples per
             each batch to be used.
+            filter_std: Boolean. The iterator both filters
+            and standardizes the recording (deviding by standard
+            deviation.
+            whiten: spatially whiten the recording.
+            scale: Float. In case filter and whitening is not needed
+            and the binary data is scaled up.
         """
         self.s_rate = sample_rate
         self.batch_time_samples = batch_time_samples
@@ -45,6 +52,9 @@ class RecordingBatchIterator(object):
         self.geometry = np.genfromtxt(geom_file, delimiter=' ')
         self.neighbs = find_channel_neighbors(
             self.geometry, self.radius)
+        self.filter_std = filter_std
+        self.whiten = whiten
+        self.scale = scale
         self.file = open(rec_file, 'r')
 
     def next_batch(self):
@@ -54,8 +64,12 @@ class RecordingBatchIterator(object):
             count= self.n_chan * self.batch_time_samples,
             dtype=np.int16)
         ts = np.reshape(ts, [self.batch_time_samples, self.n_chan])
+        if not self.filter_std:
+            return ts / self.scale
         ts = butterworth(ts, 300, 0.1, 3, self.s_rate)
         ts = ts/np.std(ts)
+        if not self.whiten:
+            return ts
         ts = whitening(ts, self.neighbs, 40)
         return ts
 
@@ -68,26 +82,29 @@ class RecordingBatchIterator(object):
 
 class MeanWaveCalculator(object):
 
-    def __init__(self, batch_reader, spike_train):
+    def __init__(self, batch_reader, spike_train, window=range(-10, 30)):
         """Sets up the object for mean wave computation.
 
-        args:
+        Args:
             spt: numpy.ndarray of shape [N, 2] where N is the total
             number of events. First column indicates the spike times
             in time sample and second is cluster identity of the
             spike times.
+            window: list of consecuitive integers. Indicating the
+            window around spike times that indicate an event.
+        Returns:
+            int. The number of boundary violations in batch processing
+            part of the mean wave calculation.
         """
         self.batch_reader = batch_reader
         self.spike_train = spike_train
-        self.window = range(-10, 30)
+        self.window = window
         self.spike_train = clean_spike_train(
             self.spike_train)
         self.n_units = max(self.spike_train[:, 1] + 1)
         self.templates = np.zeros(
             [len(self.window), batch_reader.n_chan, self.n_units])
-        print('Computing mean waveforms...')
-        status = self.compute_templates(5)
-        print('Spike time on boundary {} times.'.format(status))
+        status = self.compute_templates(self.batch_reader.n_batches)
 
     def compute_templates(self, n_batches):
         """Computes the templates from a given number of batches."""
@@ -118,7 +135,7 @@ class MeanWaveCalculator(object):
 
 class RecordingAugmentation(object):
 
-    def __init__(self, mean_wave_calculator):
+    def __init__(self, mean_wave_calculator, move_rate, augment_rate):
         """Sets up the object for stability metric computations.
 
         Args:
@@ -131,6 +148,8 @@ class RecordingAugmentation(object):
         self.x_unit = 20.0
         self.construct_channel_map()
         self.compute_stat_summary()
+        self.move_rate = move_rate
+        self.augment_rate = augment_rate
 
     def construct_channel_map(self):
         """Constucts a map of coordinate to channel index."""
@@ -199,7 +218,7 @@ class RecordingAugmentation(object):
                 self.stat_summary[u, :] = u_mean, u_std, len(spt_u)
         return self.stat_summary
 
-    def make_fake_spike_train(self, augment_rate = 0.25):
+    def make_fake_spike_train(self, augment_rate):
         """Augments the data and saves the result to binary.
 
         Args:
@@ -212,6 +231,8 @@ class RecordingAugmentation(object):
         times = []
         cid = []
         for u in range(self.template_comp.n_units):
+            if np.isnan(self.stat_summary[u, 0]) or np.isnan(self.stat_summary[u, 1]):
+                continue
             spt_u = np.sort(spt[spt[:, 1] == u, 0])
             new_spike_count = int(
                 self.stat_summary[u, 2] * augment_rate)
@@ -230,7 +251,7 @@ class RecordingAugmentation(object):
         return np.array([times, cid]).T
 
     def save_augment_recording(
-        self, out_file_name, length, move_rate=0.2, scale=1e3):
+        self, out_file_name, length, scale=1e3):
         """Augments recording and saves it to file.
 
         Args:
@@ -243,8 +264,12 @@ class RecordingAugmentation(object):
             whose augmented spike wave form is spatially moved.
 
         Returns:
-            numpy.ndarray. The new ground truth spike train.
+            Tuple with two members. First is a numpy.ndarray which
+            is the new ground truth spike train. Second is the status
+            which is a list of string, each is an error regarding
+            boundary violation for batch processing.
         """
+        status = []
         reader = self.template_comp.batch_reader
         reader.reset_cursor()
         # Determine which clusters are spatially moved.
@@ -253,7 +278,7 @@ class RecordingAugmentation(object):
         # list of unit numbers which we move spatially.
         moved_units = np.sort(
             np.random.choice(range(n_units),
-                             int(move_rate * n_units),
+                             int(self.move_rate * n_units),
                              replace=False))
         temp_shape = self.template_comp.templates.shape
         moved_templates = np.zeros(
@@ -269,11 +294,13 @@ class RecordingAugmentation(object):
             moved_templates[:, :, i] = self.move_spatial_trace(
                 orig_templates[:, :, u], dist)
         # Create augmented spike train.
-        aug_spt = self.make_fake_spike_train()
+        aug_spt = self.make_fake_spike_train(self.move_rate)
         reader = self.template_comp.batch_reader
         boundary_violation = 0
         n_samples = reader.batch_time_samples
         f = open(out_file_name, 'w')
+        # TODO: for debugging, remove later.
+        moved = moved.astype('int')
         for i in tqdm(range(length)):
             batch_idx = np.logical_and(
                 aug_spt[:, 0] > i * n_samples,
@@ -285,10 +312,13 @@ class RecordingAugmentation(object):
                 cid = spt[j, 1]
                 try:
                     if moved[cid]:
-                        ts[spt[j, 0] + self.window, :] += moved_templates[:, :, moved[cid]]
+                        ts[spt[j, 0] + self.template_comp.window, :] +=\
+                        moved_templates[:, :, moved[cid]]
                     else:
-                        ts[spt[j, 0] + self.window, :] += orig_templates[:, :, cid]
-                except:
+                        ts[spt[j, 0] + self.template_comp.window, :] +=\
+                        orig_templates[:, :, cid]
+                except Exception as e:
+                    status.append('warning:{}'.format(str(e)))
                     boundary_violation += 1
             ts *= scale
             ts = ts.astype('int16')
@@ -301,7 +331,7 @@ class RecordingAugmentation(object):
                 new_unit_id += 1
         f.close()
         return np.append(
-            self.template_comp.spike_train, aug_spt, axis=0)
+            self.template_comp.spike_train, aug_spt, axis=0), status
 
 
 class SpikeSortingEvaluation(object):
