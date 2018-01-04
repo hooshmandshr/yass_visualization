@@ -24,25 +24,29 @@ class RecordingBatchIterator(object):
                  radius, scale=1e3, filter_std=True, whiten=True):
         """Sets up the object for reading from a binary file.
 
-        Args:
-            rec_file: str. Path to binary file that contains the
-            raw recording file.
-            geom_file: str. Path to text file containing the
-            geometry file. The file should contain n_chan lines
-            and each line should contain two numbers that
+        Parameters
+        ----------
+        rec_file: str
+            Path to binary file that contains the raw recording file.
+        geom_file: str
+            Path to text file containing the geometry file. The file should
+            contain n_chan lines and each line should contain two numbers that
             are separated by ' '.
-            sample_rate: int. Recording sample rate in Hz.
-            n_batches: int. processes the recording in n_batches
-            number of consecuitive segments that start from the
-            beginning.
-            batch_time_samples: int. Number of time samples per
-            each batch to be used.
-            filter_std: Boolean. The iterator both filters
-            and standardizes the recording (deviding by standard
-            deviation.
-            whiten: spatially whiten the recording.
-            scale: Float. In case filter and whitening is not needed
-            and the binary data is scaled up.
+        sample_rate: int
+            Recording sample rate in Hz
+        n_batches: int
+            Processes the recording in n_batches number of consecuitive
+            segments that start from the beginning.
+        batch_time_samples: int
+            Number of time samples per each batch to be used.
+        filter_std: bool
+            The iterator both filters and standardizes the recording (dividing
+            by standard deviation.
+        whiten: bool
+            Spatially whiten the recording.
+        scale: float
+            In case filter and whitening is not needed and the binary data is
+            scaled up.
         """
         self.s_rate = sample_rate
         self.batch_time_samples = batch_time_samples
@@ -86,16 +90,21 @@ class MeanWaveCalculator(object):
     def __init__(self, batch_reader, spike_train, window=range(-10, 30)):
         """Sets up the object for mean wave computation.
 
-        Args:
-            spt: numpy.ndarray of shape [N, 2] where N is the total
-            number of events. First column indicates the spike times
-            in time sample and second is cluster identity of the
-            spike times.
-            window: list of consecuitive integers. Indicating the
-            window around spike times that indicate an event.
-        Returns:
-            int. The number of boundary violations in batch processing
-            part of the mean wave calculation.
+        Parameters
+        ----------
+        spt: numpy.ndarray
+            Shape [N, 2] where N is the total number of events. First column
+            indicates the spike times in time sample and second is cluster
+            identity of the spike times.
+        window: list
+            List of consecuitive integers. Indicating the window around spike
+            times that indicate an event.
+
+        Returns
+        -------
+        int
+            The number of boundary violations in batch processing part of the
+            mean wave calculation.
         """
         self.batch_reader = batch_reader
         self.spike_train = spike_train
@@ -160,11 +169,15 @@ class RecordingAugmentation(object):
     def move_spatial_trace(self, template, dist, spatial_size=10, mode='amp'):
         """Moves the waveform spatially around the probe.
 
-        template: numpy.ndarray of shape [T, C]
-        spatial_size: int. How many channels comprise the
-        spatial trace of the given template.
-        mode: str. Main channels are detected using amplitude if
-        'amp' and energy otherwise.
+        Parameters
+        ----------
+        template: numpy.ndarray
+            Shape [T, C]
+        spatial_size: int
+            How many channels comprise the spatial trace of the given template.
+        mode: str
+            Main channels are detected using amplitude if 'amp' and energy
+            otherwise.
         """
         new_temp = np.zeros(template.shape)
         if mode == 'amp':
@@ -192,11 +205,12 @@ class RecordingAugmentation(object):
         between consecutive firings of a particular unit
         as a log-normal distribution.
 
-        Returns:
-            np.ndarray of shape [U, 3] where U is
-            the number of units in the spike train. The columns of
-            the summary respectively correspond to mean, standard
-            devation of the log-normal and the total count of spikes
+        Returns
+        -------
+        np.ndarray
+            Shape [U, 3] where U is the number of units in the spike train.
+            The columns of the summary respectively correspond to mean,
+            standard devation of the log-normal and the total count of spikes
             for units.
         """
         self.stat_summary = np.zeros(
@@ -221,9 +235,11 @@ class RecordingAugmentation(object):
     def make_fake_spike_train(self, augment_rate):
         """Augments the data and saves the result to binary.
 
-        Args:
-            augment_rate: float between 0 and 1. Augmented spikes
-            per unit (percentage of total spikes per unit).
+        Parameters
+        ----------
+        augment_rate: float
+            Between 0 and 1. Augmented spikes per unit (percentage of total
+            spikes per unit).
         """
         refractory_period = 60
         spt = self.template_comp.spike_train
@@ -253,16 +269,20 @@ class RecordingAugmentation(object):
     def save_augment_recording(self, out_file_name, length, scale=1e3):
         """Augments recording and saves it to file.
 
-        Args:
-            out_file_name: str. Name of output file where the
-            augmented recording is writen to.
-            length: int. length of augmented recording in batch
-            size of the originial batch iterator object which is
-            in the mean wave calculatro object.
-            move_rate: float between 0 and 1. Percentage of units
-            whose augmented spike wave form is spatially moved.
+        Parameters
+        ----------
+        out_file_name: str
+            Name of output file where the augmented recording is writen to.
+        length: int
+            Length of augmented recording in batch size of the originial batch
+            iterator object which is in the mean wave calculatro object.
+        move_rate: float
+            Between 0 and 1. Percentage of units whose augmented spike wave
+            form is spatially moved.
 
-        Returns:
+        Returns
+        -------
+        tuple
             Tuple with two members. First is a numpy.ndarray which
             is the new ground truth spike train. Second is the status
             which is a list of string, each is an error regarding
@@ -338,15 +358,17 @@ class SpikeSortingEvaluation(object):
     def __init__(self, spt_base, spt, tmp_base, tmp):
         """Sets up the evaluation object with two spike trains.
 
-            Args:
-            spt_base: numpy.ndarray of shape [N, 2]. base line spike
-            trian. First column is spike times and second the cluster
-            identities.
-            spt: numpy.ndarray of shape [M, 2].
-            tmp_base: numpy.ndarray of shape [T1, C, N]. Ground truth
-            unit mean waveforms.
-            tmp_base: numpy.ndarray of shape [T2, C, M]. Clustering
-            units mean waveforms.
+        Parameters
+        ----------
+        spt_base: numpy.ndarray
+            Shape [N, 2]. base line spike train. First column is spike times
+            and second the cluster identities.
+        spt: numpy.ndarray
+            Shape [M, 2].
+        tmp_base: numpy.ndarray
+            Shape [T1, C, N]. Ground truth unit mean waveforms.
+        tmp_base: numpy.ndarray
+            Shape [T2, C, M]. Clustering units mean waveforms.
         """
         # clean the spike train before calling this function.
         self.tmp_base = tmp_base
@@ -371,9 +393,10 @@ class SpikeSortingEvaluation(object):
     def count_spikes(self, spt):
         """Counts spike events per cluster/units.
 
-        Args:
-            spt: numpy.ndarray of shape [N, 2]. Clean spike
-            train where cluster ids are 0, ..., N-1.
+        Parameters
+        ----------
+        spt: numpy.ndarray
+            Shape [N, 2]. Clean spike train where cluster ids are 0, ..., N-1.
         """
         n_cluster = np.max(spt[:, 1]) + 1
         counts = np.zeros(n_cluster)
@@ -402,9 +425,11 @@ class SpikeSortingEvaluation(object):
     def count_matches(self, array1, array2):
         """Finds the matches between two count process.
 
-        Returns:
-            int. Number of temporal collisions of spikes in
-            array1 vs spikes in array2.
+        Returns
+        -------
+        int
+            Number of temporal collisions of spikes in array1 vs spikes in
+            array2.
         """
         # In time samples
         self.admissible_proximity = 60
