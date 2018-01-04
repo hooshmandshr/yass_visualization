@@ -1,11 +1,11 @@
 import numpy as np
 
-from scipy.signal import butter, lfilter
-from scipy.spatial.distance import pdist, squareform, cdist
-from tqdm import *
+from scipy.spatial.distance import cdist
+from tqdm import tqdm
 
-from geometry import find_channel_neighbors
-from filtering import *
+from yass.geometry import find_channel_neighbors
+from filtering import butterworth, whitening
+
 
 def clean_spike_train(spt):
     units = np.unique(spt[:, 1])
@@ -23,7 +23,7 @@ class RecordingBatchIterator(object):
                  n_batches, batch_time_samples, n_chan,
                  radius, scale=1e3, filter_std=True, whiten=True):
         """Sets up the object for reading from a binary file.
-        
+
         Args:
             rec_file: str. Path to binary file that contains the
             raw recording file.
@@ -61,7 +61,7 @@ class RecordingBatchIterator(object):
         """Gets the next temporal batch of recording."""
         ts = np.fromfile(
             self.file,
-            count= self.n_chan * self.batch_time_samples,
+            count=self.n_chan * self.batch_time_samples,
             dtype=np.int16)
         ts = np.reshape(ts, [self.batch_time_samples, self.n_chan])
         if not self.filter_std:
@@ -79,6 +79,7 @@ class RecordingBatchIterator(object):
 
     def close_iterator(self):
         self.file.close()
+
 
 class MeanWaveCalculator(object):
 
