@@ -129,7 +129,8 @@ class MeanWaveCalculator(object):
             ts = self.batch_reader.next_batch()
             for j in range(spt.shape[0]):
                 try:
-                    self.templates[:, :, spt[j, 1]] += ts[spt[j, 0] + self.window, :]
+                    self.templates[:, :, spt[j, 1]] += (ts[spt[j, 0] +
+                                                        self.window, :])
                     counts[spt[j, 1]] += 1
                 except Exception:
                     boundary_violation += 1
@@ -147,8 +148,9 @@ class RecordingAugmentation(object):
     def __init__(self, mean_wave_calculator, move_rate, augment_rate):
         """Sets up the object for stability metric computations.
 
-        Args:
-            mean_wave_calculator: MeanWaveCalculator object.
+        Parameters
+        ----------
+        mean_wave_calculator: MeanWaveCalculator
         """
         self.template_comp = mean_wave_calculator
         self.geometry = mean_wave_calculator.batch_reader.geometry
@@ -247,8 +249,11 @@ class RecordingAugmentation(object):
         times = []
         cid = []
         for u in range(self.template_comp.n_units):
-            if np.isnan(self.stat_summary[u, 0]) or np.isnan(self.stat_summary[u, 1]):
+
+            if (np.isnan(self.stat_summary[u, 0]) or
+               np.isnan(self.stat_summary[u, 1])):
                 continue
+
             spt_u = np.sort(spt[spt[:, 1] == u, 0])
             new_spike_count = int(
                 self.stat_summary[u, 2] * augment_rate)
@@ -332,10 +337,10 @@ class RecordingAugmentation(object):
                 try:
                     if moved[cid]:
                         ts[spt[j, 0] + self.template_comp.window, :] +=\
-                        moved_templates[:, :, moved[cid]]
+                                       moved_templates[:, :, moved[cid]]
                     else:
                         ts[spt[j, 0] + self.template_comp.window, :] +=\
-                        orig_templates[:, :, cid]
+                                       orig_templates[:, :, cid]
                 except Exception as e:
                     status.append('warning:{}'.format(str(e)))
                     boundary_violation += 1
@@ -450,8 +455,8 @@ class SpikeSortingEvaluation(object):
     def compute_accuracies(self):
         """Computes the TP/FP accuracies for the given spike trains."""
         # Calculate and match energy of templates.
-        #energy_base = np.linalg.norm(self.tmp_base, axis=0)
-        #energy = np.linalg.norm(self.tmp, axis=0)
+        # energy_base = np.linalg.norm(self.tmp_base, axis=0)
+        # energy = np.linalg.norm(self.tmp, axis=0)
         energy_base = np.max(self.tmp_base, axis=0)
         energy = np.max(self.tmp, axis=0)
         energy_dist = cdist(energy_base.T, energy.T)
@@ -459,14 +464,17 @@ class SpikeSortingEvaluation(object):
         # -1 indicates no matching if n_units > n_clusters.
         unmatched_clusters = range(self.n_clusters)
         self.unit_cluster_map = np.zeros(self.n_units, dtype='int') - 1
+
         # First match the largest energy ground truth templates.
-        for unit in reversed(
-            np.argsort(np.linalg.norm(energy_base, axis=0))):
+        for unit in reversed(np.argsort(np.linalg.norm(energy_base, axis=0))):
+
             if len(unmatched_clusters) < 1:
                 break
             # If the closest template is not very similar skip it.
-            if np.min(energy_dist[unit, unmatched_clusters]) > 1/4 * np.linalg.norm(energy_base[:, unit]):
+            if (np.min(energy_dist[unit, unmatched_clusters]) >
+               1/4 * np.linalg.norm(energy_base[:, unit])):
                 continue
+
             matched_cluster_id = unmatched_clusters[np.argmin(
                 energy_dist[unit, unmatched_clusters])]
             unmatched_clusters.remove(matched_cluster_id)
@@ -474,8 +482,11 @@ class SpikeSortingEvaluation(object):
         # Units which have a match in the clusters.
         rec_units = np.where(self.unit_cluster_map > -1)[0]
         recovered = np.zeros(self.n_units)
+
         for unit in rec_units:
-            recovered[unit] = self.confusion_matrix[unit, self.unit_cluster_map[unit]]
+            recovered[unit] = (self.confusion_matrix[unit,
+                               self.unit_cluster_map[unit]])
+
         self.true_positive = recovered / self.spike_count_base
         match_count = self.spike_count_cluster[self.unit_cluster_map]
         self.false_positive = (match_count - recovered) / match_count
