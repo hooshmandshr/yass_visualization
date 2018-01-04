@@ -1,5 +1,8 @@
 """
 Filtering functions
+
+Original source:
+https://github.com/hooshmandshr/yass_visualization/blob/master/src/stability/filtering.py
 """
 
 import numpy as np

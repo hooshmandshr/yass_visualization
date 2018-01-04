@@ -1,3 +1,10 @@
+"""
+Stability evaluation
+
+Original source:
+https://github.com/hooshmandshr/yass_visualization/blob/master/src/stability/stability_evaluation.py
+"""
+
 import numpy as np
 
 from scipy.spatial.distance import cdist
