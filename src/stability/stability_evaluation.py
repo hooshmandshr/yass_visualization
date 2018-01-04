@@ -105,7 +105,6 @@ class MeanWaveCalculator(object):
         self.n_units = max(self.spike_train[:, 1] + 1)
         self.templates = np.zeros(
             [len(self.window), batch_reader.n_chan, self.n_units])
-        status = self.compute_templates(self.batch_reader.n_batches)
 
     def compute_templates(self, n_batches):
         """Computes the templates from a given number of batches."""
@@ -123,7 +122,7 @@ class MeanWaveCalculator(object):
                 try:
                     self.templates[:, :, spt[j, 1]] += ts[spt[j, 0] + self.window, :]
                     counts[spt[j, 1]] += 1
-                except:
+                except Exception:
                     boundary_violation += 1
         for u in range(self.n_units):
             if counts[u]:
@@ -182,7 +181,7 @@ class RecordingAugmentation(object):
             else:
                 continue
         idx_origin = trans[trans[:, 1] >= 0, 0]
-        idx_moved = trans[trans[:, 1] >=0, 1]
+        idx_moved = trans[trans[:, 1] >= 0, 1]
         new_temp[:, idx_moved] = template[:, idx_origin]
         return new_temp
 
@@ -245,14 +244,13 @@ class RecordingAugmentation(object):
             # sampled differential times.
             offsets = np.sort(
                 np.random.choice(spt_u, new_spike_count, replace=False))
-            
+
             diffs[diffs < refractory_period] += refractory_period
             times += list(offsets + diffs)
             cid += [u] * new_spike_count
         return np.array([times, cid]).T
 
-    def save_augment_recording(
-        self, out_file_name, length, scale=1e3):
+    def save_augment_recording(self, out_file_name, length, scale=1e3):
         """Augments recording and saves it to file.
 
         Args:
@@ -369,7 +367,7 @@ class SpikeSortingEvaluation(object):
         self.false_positive = np.zeros(self.n_units)
         self.unit_cluster_map = np.zeros(self.n_units, dtype='int')
         self.compute_accuracies()
-        
+
     def count_spikes(self, spt):
         """Counts spike events per cluster/units.
 
@@ -387,7 +385,7 @@ class SpikeSortingEvaluation(object):
         """Calculates the confusion matrix of two spike trains.
 
         The first spike train is the instances original spike train.
-        The second one is given as an argument. 
+        The second one is given as an argument.
         """
         confusion_matrix = np.zeros(
             [self.n_units, self.n_clusters])
