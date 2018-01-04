@@ -10,6 +10,10 @@ from scipy.signal import butter, lfilter
 
 from geometry import n_steps_neigh_channels
 
+# FIXME: these functions were copied from yass when this was in a separate repo
+# the yass versions have been updated, we need to update the stability copied
+# to make use of the new yass functions and remove this file
+
 
 def butterworth(ts, low_freq, high_factor, order, sampling_freq):
     """Butterworth filter of for time series

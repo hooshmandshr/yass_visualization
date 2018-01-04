@@ -24,6 +24,7 @@ def clean_spike_train(spt):
     return spt
 
 
+# TODO: remove this and use new yass Reader
 class RecordingBatchIterator(object):
 
     def __init__(self, rec_file, geom_file, sample_rate,
